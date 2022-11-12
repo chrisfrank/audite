@@ -47,7 +47,7 @@ def test_it_audits_insert_update_and_delete_on_all_tables_by_default(
         for row in db.execute(
             """
             SELECT position, tblname, rowname, operation, changed_at, payload
-            from _audite ORDER BY position
+            from _audite_history ORDER BY position
             """
         )
     ]
@@ -79,7 +79,7 @@ def test_it_supports_compound_primary_keys(db: sqlite3.Connection) -> None:
         VALUES ('hello','world', 1, 3.14159)
         """
     )
-    history = list(db.execute("SELECT rowname FROM _audite"))
+    history = list(db.execute("SELECT rowname FROM _audite_history"))
     assert history == [("hello/world/1/3.14159",)]
 
 
@@ -100,12 +100,19 @@ def test_it_audits_changes_from_external_processes(db: sqlite3.Connection) -> No
     args = ["python3", "-c", "\n".join(script)]
     subprocess.run(args, check=True)
 
-    history = list(db.execute("SELECT tblname, rowname FROM _audite"))
+    history = list(db.execute("SELECT tblname, rowname FROM _audite_history"))
     assert history == [("post", "1")]
 
 
 def test_it_can_customize_table_name(db: sqlite3.Connection) -> None:
-    pass
+    track_changes(db, history_table="custom_history")
+    db.execute("INSERT INTO post (content) VALUES ('first'), ('second')")
+
+    history = list(db.execute("SELECT position FROM custom_history"))
+    assert history == [(1,), (2,)]
+
+    with pytest.raises(sqlite3.OperationalError):
+        db.execute("SELECT * FROM _audite_history")
 
 
 def test_it_can_audit_only_specified_tables(db: sqlite3.Connection) -> None:

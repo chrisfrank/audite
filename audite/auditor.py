@@ -1,6 +1,8 @@
 import sqlite3
 import typing as t
 
+HISTORY_TABLE = "_audite_history"
+
 
 class Record(t.NamedTuple):
     position: int
@@ -26,7 +28,7 @@ def _gen_audit_table_ddl(table_name: str) -> str:
 
 
 def _track_table(
-    db: sqlite3.Connection, table: str, event: str, tracking_table: str
+    db: sqlite3.Connection, table: str, event: str, history_table: str
 ) -> None:
     cursor = db.cursor()
     record_ref = "OLD" if event == "DELETE" else "NEW"
@@ -53,25 +55,25 @@ def _track_table(
     statement = f"""
     CREATE TRIGGER {trigger_name} AFTER {event} ON {table}
     BEGIN
-        INSERT INTO {tracking_table} (tblname, rowname, operation, payload) VALUES
+        INSERT INTO {history_table} (tblname, rowname, operation, payload) VALUES
         ('{table}', {rowname}, '{event[:1]}', json_object({json_obj_pairs}));
     END;
     """
     cursor.execute(statement)
 
 
-def track_changes(db: sqlite3.Connection, audite_table_name: str = "_audite") -> None:
+def track_changes(db: sqlite3.Connection, history_table: str = HISTORY_TABLE) -> None:
     events = ["INSERT", "UPDATE", "DELETE"]
     with db:
         db.execute("BEGIN")
-        db.execute(_gen_audit_table_ddl(audite_table_name))
+        db.execute(_gen_audit_table_ddl(history_table))
         tables = db.execute(
             """
             SELECT tbl_name FROM sqlite_schema
             WHERE type='table' AND tbl_name NOT LIKE 'sqlite%'
-            AND tbl_name != :audite_table_name
+            AND tbl_name != :history_table
             """,
-            {"audite_table_name": audite_table_name},
+            {"history_table": history_table},
         ).fetchall()
 
         for table in tables:
@@ -80,5 +82,5 @@ def track_changes(db: sqlite3.Connection, audite_table_name: str = "_audite") ->
                     db,
                     table=table[0],
                     event=event,
-                    tracking_table=audite_table_name,
+                    history_table=history_table,
                 )
