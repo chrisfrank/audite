@@ -69,7 +69,7 @@ def track_changes(db: sqlite3.Connection, history_table: str = HISTORY_TABLE) ->
         db.execute(_gen_audit_table_ddl(history_table))
         tables = db.execute(
             """
-            SELECT tbl_name FROM sqlite_schema
+            SELECT tbl_name FROM sqlite_master
             WHERE type='table' AND tbl_name NOT LIKE 'sqlite%'
             AND tbl_name != :history_table
             """,
