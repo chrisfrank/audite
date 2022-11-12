@@ -1,6 +1,7 @@
 import json
 import pathlib
 import sqlite3
+import subprocess
 import tempfile
 import typing as t
 
@@ -28,7 +29,7 @@ def db() -> t.Iterator[sqlite3.Connection]:
         yield db
 
 
-def test_audits_insert_update_and_delete_on_all_tables_by_default(
+def test_it_audits_insert_update_and_delete_on_all_tables_by_default(
     db: sqlite3.Connection,
 ) -> None:
     track_changes(db)
@@ -59,7 +60,7 @@ def test_audits_insert_update_and_delete_on_all_tables_by_default(
     assert first_post_json["content"] == "first"
 
 
-def test_supports_compound_primary_keys(db: sqlite3.Connection) -> None:
+def test_it_supports_compound_primary_keys(db: sqlite3.Connection) -> None:
     db.execute(
         """
         CREATE TABLE compound (
@@ -88,9 +89,19 @@ def test_it_does_not_miss_messages_when_recreating_tables_and_triggers(
     pass
 
 
-def test_it_audits_changes_from_external_connections(db: sqlite3.Connection) -> None:
+def test_it_audits_changes_from_external_processes(db: sqlite3.Connection) -> None:
     _, _, dbpath = db.execute("PRAGMA database_list").fetchone()
-    pass
+    track_changes(db)
+    script = [
+        "import sqlite3",
+        f"db = sqlite3.connect('{dbpath}', isolation_level=None)",
+        """db.execute("INSERT INTO post (content) VALUES ('external')")""",
+    ]
+    args = ["python3", "-c", "\n".join(script)]
+    subprocess.run(args, check=True)
+
+    history = list(db.execute("SELECT tblname, rowname FROM _audite"))
+    assert history == [("post", "1")]
 
 
 def test_it_can_customize_table_name(db: sqlite3.Connection) -> None:
