@@ -46,7 +46,7 @@ def test_it_audits_insert_update_and_delete_on_all_tables_by_default(
         Record(*row)
         for row in db.execute(
             """
-            SELECT position, tblname, rowname, operation, changed_at, payload
+            SELECT position, tblname, rowname, operation, changed_at, newval, oldval
             from _audite_history ORDER BY position
             """
         )
@@ -54,10 +54,17 @@ def test_it_audits_insert_update_and_delete_on_all_tables_by_default(
     operations = [row.operation for row in history]
     assert operations == ["I", "I", "I", "I", "U", "D"]
 
-    # todo split payload into 'old' and 'new'
-    first_post_json = json.loads(history[0].payload)
+    first_post_json = json.loads(history[0].newval or "{}")
     assert first_post_json["id"] == 1
     assert first_post_json["content"] == "first"
+
+    deleted_post_oldval = json.loads(history[-1].oldval or "{}")
+    assert deleted_post_oldval["content"] == "second"
+    assert history[-1].newval is None
+
+    update = [row for row in history if row.operation == "U"][0]
+    assert json.loads(update.oldval or "")["content"] == "first comment"
+    assert json.loads(update.newval or "")["content"] == "revised"
 
 
 def test_it_supports_compound_primary_keys(db: sqlite3.Connection) -> None:
@@ -133,8 +140,8 @@ def test_it_follows_schema_changes(db: sqlite3.Connection) -> None:
         db.execute("INSERT INTO post (body, version) VALUES ('after', 2)")
         db.execute("INSERT INTO not_yet_audited (value) VALUES ('audited now')")
 
-    history = list(db.execute("SELECT payload FROM _audite_history"))
-    changes = [json.loads(row[0]) for row in history]
+    history = list(db.execute("SELECT newval FROM _audite_history"))
+    changes = [json.loads(row[0] or "{}") for row in history]
 
     assert changes[0]["content"] == "before"
     assert "version" not in changes[0]
