@@ -126,10 +126,12 @@ def test_it_follows_schema_changes(db: sqlite3.Connection) -> None:
         db.execute("INSERT INTO post (content) VALUES ('before')")
         db.execute("ALTER TABLE post ADD COLUMN version INTEGER")
         db.execute("ALTER TABLE post RENAME COLUMN content TO body")
+        db.execute("CREATE TABLE not_yet_audited (value TEXT PRIMARY KEY)")
 
     with db:
         track_changes(db)
         db.execute("INSERT INTO post (body, version) VALUES ('after', 2)")
+        db.execute("INSERT INTO not_yet_audited (value) VALUES ('audited now')")
 
     history = list(db.execute("SELECT payload FROM _audite_history"))
     changes = [json.loads(row[0]) for row in history]
@@ -140,6 +142,7 @@ def test_it_follows_schema_changes(db: sqlite3.Connection) -> None:
     assert "content" not in changes[1]
     assert changes[1]["body"] == "after"
     assert changes[1]["version"] == 2
+    assert changes[2]["value"] == "audited now"
 
 
 def test_it_raises_when_trying_to_enable_auditing_in_an_already_open_tx(
