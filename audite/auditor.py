@@ -29,7 +29,7 @@ def _gen_audit_table_ddl(table_name: str) -> str:
     return ddl
 
 
-def _json_object_sql(ref: t.Literal["OLD", "NEW"], cols: list[str]) -> str:
+def _json_object_sql(ref: t.Literal["OLD", "NEW"], cols: t.List[str]) -> str:
     """
     Approximates pg's 'row_to_json()' function by inspecting the table schema
     and building a json_object(label1, value1, label2, value2...) expression.
@@ -41,7 +41,7 @@ def _json_object_sql(ref: t.Literal["OLD", "NEW"], cols: list[str]) -> str:
     return sql
 
 
-def _build_newval_oldval_sql(cols: list[str], event: str) -> tuple[str, str]:
+def _build_newval_oldval_sql(cols: t.List[str], event: str) -> t.Tuple[str, str]:
     if event == "DELETE":
         return "NULL", _json_object_sql("OLD", cols)
     elif event == "UPDATE":
