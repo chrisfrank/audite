@@ -65,6 +65,12 @@ def _track_table(
 def track_changes(db: sqlite3.Connection, history_table: str = HISTORY_TABLE) -> None:
     events = ["INSERT", "UPDATE", "DELETE"]
     with db:
+        if db.in_transaction:
+            msg = (
+                "Cannot enable auditing: this connection already has a "
+                "transaction in progress. COMMIT or ROLLBACK and try again."
+            )
+            raise sqlite3.ProgrammingError(msg)
         db.execute("BEGIN")
         db.execute(_gen_audit_table_ddl(history_table))
         tables = db.execute(

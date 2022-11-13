@@ -117,3 +117,35 @@ def test_it_can_customize_table_name(db: sqlite3.Connection) -> None:
 
 def test_it_can_audit_only_specified_tables(db: sqlite3.Connection) -> None:
     pass
+
+
+def test_it_follows_schema_changes(db: sqlite3.Connection) -> None:
+    track_changes(db)
+
+    with db:
+        db.execute("INSERT INTO post (content) VALUES ('before')")
+        db.execute("ALTER TABLE post ADD COLUMN version INTEGER")
+        db.execute("ALTER TABLE post RENAME COLUMN content TO body")
+
+    with db:
+        track_changes(db)
+        db.execute("INSERT INTO post (body, version) VALUES ('after', 2)")
+
+    history = list(db.execute("SELECT payload FROM _audite_history"))
+    changes = [json.loads(row[0]) for row in history]
+
+    assert changes[0]["content"] == "before"
+    assert "version" not in changes[0]
+
+    assert "content" not in changes[1]
+    assert changes[1]["body"] == "after"
+    assert changes[1]["version"] == 2
+
+
+def test_it_raises_when_trying_to_enable_auditing_in_an_already_open_tx(
+    db: sqlite3.Connection,
+) -> None:
+    db.execute("BEGIN")
+    db.execute("INSERT INTO post (content) VALUES ('pending')")
+    with pytest.raises(sqlite3.ProgrammingError):
+        track_changes(db)
