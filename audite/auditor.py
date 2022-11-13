@@ -10,7 +10,8 @@ class Record(t.NamedTuple):
     rowname: str
     operation: str
     changed_at: int
-    payload: str = ""
+    newval: t.Optional[str] = None
+    oldval: t.Optional[str] = None
 
 
 def _gen_audit_table_ddl(table_name: str) -> str:
@@ -21,10 +22,34 @@ def _gen_audit_table_ddl(table_name: str) -> str:
         rowname TEXT NOT NULL,
         operation TEXT NOT NULL,
         changed_at INTEGER NOT NULL DEFAULT (strftime('%s', CURRENT_TIMESTAMP)),
-        payload TEXT
+        newval TEXT,
+        oldval TEXT
     );
     """
     return ddl
+
+
+def _json_object_sql(ref: t.Literal["OLD", "NEW"], cols: list[str]) -> str:
+    """
+    Approximates pg's 'row_to_json()' function by inspecting the table schema
+    and building a json_object(label1, value1, label2, value2...) expression.
+
+    https://www.sqlite.org/json1.html#jobj
+    """
+
+    sql = "json_object(" + ", ".join([f"'{col}', {ref}.{col}" for col in cols]) + ")"
+    return sql
+
+
+def _build_newval_oldval_sql(cols: list[str], event: str) -> tuple[str, str]:
+    if event == "DELETE":
+        return "NULL", _json_object_sql("OLD", cols)
+    elif event == "UPDATE":
+        return _json_object_sql("NEW", cols), _json_object_sql("OLD", cols)
+    elif event == "INSERT":
+        return _json_object_sql("NEW", cols), "NULL"
+
+    raise ValueError(f"{event} is not one of INSERT, UPDATE, or DELETE")
 
 
 def _track_table(
@@ -43,20 +68,18 @@ def _track_table(
     key_columns = [f"{record_ref}.{f[0]}" for f in fields if f[1] > 0]
     all_columns = [field[0] for field in fields]
 
-    # for tables with a single-column primary key, rowname is just the
-    # primary key as text. for compound primary keys, concatenate each
-    # key separated by '/'
+    # for tables with a single-column primary key, rowname is just the primary
+    # key as text. for compound primary keys, concatenate each key separated by
+    # '/', so that e.g. (1,) becomes '1' and (1, 'abc') becomes '1/abc'
     rowname = " || '/' || ".join(key_columns)
 
-    # sqlite doesn't have pg's `row_to_json()`, but json_obj_pairs works just
-    # fine when we know the column names in advance.
-    json_obj_pairs = ", ".join([f"'{col}', {record_ref}.{col}" for col in all_columns])
+    newval, oldval = _build_newval_oldval_sql(all_columns, event)
 
     statement = f"""
     CREATE TRIGGER {trigger_name} AFTER {event} ON {table}
     BEGIN
-        INSERT INTO {history_table} (tblname, rowname, operation, payload) VALUES
-        ('{table}', {rowname}, '{event[:1]}', json_object({json_obj_pairs}));
+        INSERT INTO {history_table} (tblname, rowname, operation, newval, oldval)
+        VALUES ('{table}', {rowname}, '{event[:1]}', json({newval}), json({oldval}));
     END;
     """
     cursor.execute(statement)
