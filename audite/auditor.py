@@ -85,10 +85,31 @@ def _track_table(
     cursor.execute(statement)
 
 
+def _create_indices(db: sqlite3.Connection, history_table: str) -> None:
+    # Support querying the history of a particular record:
+    # SELECT * from _audite_history WHERE (tablename, rowname) = ('post', '123')
+    db.execute(
+        f"""
+        CREATE INDEX IF NOT EXISTS {history_table}_tblname_rowname_position_idx
+        ON {history_table} (tblname, rowname, position)
+        """
+    )
+
+    # Support querying by timestamp:
+    # SELECT * from _audite_history WHERE changed_at > 123 AND changed_at < 456;
+    db.execute(
+        f"""
+        CREATE INDEX IF NOT EXISTS {history_table}_changed_at_position_idx
+        ON {history_table} (changed_at, position)
+        """
+    )
+
+
 def track_changes(
     db: sqlite3.Connection,
     history_table: str = HISTORY_TABLE,
     tables: t.Optional[t.List[str]] = None,
+    autoindex: bool = True,
 ) -> None:
     events = ["INSERT", "UPDATE", "DELETE"]
     with db:
@@ -122,3 +143,6 @@ def track_changes(
                     event=event,
                     history_table=history_table,
                 )
+
+        if autoindex:
+            _create_indices(db, history_table)

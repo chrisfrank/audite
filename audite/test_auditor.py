@@ -168,3 +168,18 @@ def test_it_raises_when_trying_to_enable_auditing_in_an_already_open_tx(
     db.execute("INSERT INTO post (content) VALUES ('pending')")
     with pytest.raises(sqlite3.ProgrammingError):
         track_changes(db)
+
+
+def test_it_adds_indices_by_default(db: sqlite3.Connection) -> None:
+    track_changes(db)
+    idx_name = "_audite_history_tblname_rowname_position_idx"
+    q = f"SELECT name FROM sqlite_master WHERE type='index' AND name = '{idx_name}'"
+
+    idx = db.execute(q).fetchone()[0]
+    assert idx
+
+    db.execute(f"DROP INDEX {idx_name}")
+    track_changes(db, autoindex=False)
+
+    idx = db.execute(q).fetchone()
+    assert idx is None
