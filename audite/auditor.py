@@ -85,7 +85,11 @@ def _track_table(
     cursor.execute(statement)
 
 
-def track_changes(db: sqlite3.Connection, history_table: str = HISTORY_TABLE) -> None:
+def track_changes(
+    db: sqlite3.Connection,
+    history_table: str = HISTORY_TABLE,
+    tables: t.Optional[t.List[str]] = None,
+) -> None:
     events = ["INSERT", "UPDATE", "DELETE"]
     with db:
         if db.in_transaction:
@@ -96,20 +100,25 @@ def track_changes(db: sqlite3.Connection, history_table: str = HISTORY_TABLE) ->
             raise sqlite3.ProgrammingError(msg)
         db.execute("BEGIN")
         db.execute(_gen_audit_table_ddl(history_table))
-        tables = db.execute(
-            """
-            SELECT tbl_name FROM sqlite_master
-            WHERE type='table' AND tbl_name NOT LIKE 'sqlite%'
-            AND tbl_name != :history_table
-            """,
-            {"history_table": history_table},
-        ).fetchall()
+
+        if tables is None:
+            tables = [
+                row[0]
+                for row in db.execute(
+                    """
+                    SELECT tbl_name FROM sqlite_master
+                    WHERE type='table' AND tbl_name NOT LIKE 'sqlite%'
+                    AND tbl_name != :history_table
+                    """,
+                    {"history_table": history_table},
+                )
+            ]
 
         for table in tables:
             for event in events:
                 _track_table(
                     db,
-                    table=table[0],
+                    table=table,
                     event=event,
                     history_table=history_table,
                 )

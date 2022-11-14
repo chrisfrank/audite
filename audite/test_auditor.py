@@ -123,7 +123,16 @@ def test_it_can_customize_table_name(db: sqlite3.Connection) -> None:
 
 
 def test_it_can_audit_only_specified_tables(db: sqlite3.Connection) -> None:
-    pass
+    track_changes(db, tables=["post"])
+    db.execute("INSERT INTO post (content) VALUES ('first')")
+    db.execute(
+        """
+        INSERT INTO comment (id, post_id, content) VALUES
+        ('comment.1', 1, 'first comment')
+        """
+    )
+    history = list(db.execute("SELECT tblname FROM _audite_history"))
+    assert history == [("post",)]
 
 
 def test_it_follows_schema_changes(db: sqlite3.Connection) -> None:
