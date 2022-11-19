@@ -4,7 +4,7 @@ import typing as t
 HISTORY_TABLE = "_audite_history"
 
 
-class Record(t.NamedTuple):
+class Event(t.NamedTuple):
     id: int
     source: str
     subject: str

@@ -9,7 +9,7 @@ import typing as t
 import cloudevents.http  # type: ignore
 import pytest
 
-from .auditor import Record, track_changes
+from .auditor import Event, track_changes
 
 
 @pytest.fixture
@@ -45,7 +45,7 @@ def test_it_audits_insert_update_and_delete_on_all_tables_by_default(
     db.execute("UPDATE comment SET content = 'revised' WHERE id = 'comment.1'")
     db.execute("DELETE from post WHERE id = 2")
     history = [
-        Record(*row)
+        Event(*row)
         for row in db.execute(
             """
             SELECT id, source, subject, type, time, data
