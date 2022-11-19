@@ -15,7 +15,7 @@ long_description = (here / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="audite",
-    version="0.2.0",
+    version="0.3.0",
     description="Instant data auditing for SQLite",
     long_description=long_description,
     long_description_content_type="text/markdown",

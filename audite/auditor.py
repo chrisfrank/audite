@@ -5,25 +5,23 @@ HISTORY_TABLE = "_audite_history"
 
 
 class Record(t.NamedTuple):
-    position: int
-    tblname: str
-    rowname: str
-    operation: str
-    changed_at: int
-    newval: t.Optional[str] = None
-    oldval: t.Optional[str] = None
+    id: int
+    source: str
+    subject: str
+    type: str
+    time: str
+    data: str
 
 
 def _gen_audit_table_ddl(table_name: str) -> str:
     ddl = f"""
-    CREATE TABLE IF NOT EXISTS {table_name} (
-        position INTEGER PRIMARY KEY AUTOINCREMENT,
-        tblname TEXT NOT NULL,
-        rowname TEXT NOT NULL,
-        operation TEXT NOT NULL,
-        changed_at INTEGER NOT NULL DEFAULT (strftime('%s', CURRENT_TIMESTAMP)),
-        newval TEXT,
-        oldval TEXT
+    CREATE TABLE IF NOT EXISTS "{table_name}" (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        type TEXT NOT NULL,
+        data JSON,
+        time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S+00:00'))
     );
     """
     return ddl
@@ -41,13 +39,16 @@ def _json_object_sql(ref: t.Literal["OLD", "NEW"], cols: t.List[str]) -> str:
     return sql
 
 
-def _build_newval_oldval_sql(cols: t.List[str], event: str) -> t.Tuple[str, str]:
+def _build_newval_oldval_sql(cols: t.List[str], event: str) -> str:
     if event == "DELETE":
-        return "NULL", _json_object_sql("OLD", cols)
+        return f"json_object('values', {_json_object_sql('OLD', cols)})"
     elif event == "UPDATE":
-        return _json_object_sql("NEW", cols), _json_object_sql("OLD", cols)
+        return (
+            f"json_object('values', {_json_object_sql('NEW', cols)}, "
+            f"'oldvalues', {_json_object_sql('OLD', cols)})"
+        )
     elif event == "INSERT":
-        return _json_object_sql("NEW", cols), "NULL"
+        return f"json_object('values', {_json_object_sql('NEW', cols)})"
 
     raise ValueError(f"{event} is not one of INSERT, UPDATE, or DELETE")
 
@@ -70,37 +71,44 @@ def _track_table(
 
     # for tables with a single-column primary key, rowname is just the primary
     # key as text. for compound primary keys, concatenate each key separated by
-    # '/', so that e.g. (1,) becomes '1' and (1, 'abc') becomes '1/abc'
-    rowname = " || '/' || ".join(key_columns)
+    # ':', so that e.g. (1,) becomes '1' and (1, 'abc') becomes '1:abc'
+    rowname = " || ':' || ".join(key_columns)
 
-    newval, oldval = _build_newval_oldval_sql(all_columns, event)
+    data = _build_newval_oldval_sql(all_columns, event)
+
+    row_ops_to_crud_events = {
+        "INSERT": f"{table}.created",
+        "UPDATE": f"{table}.updated",
+        "DELETE": f"{table}.deleted",
+    }
+    event_type = row_ops_to_crud_events[event]
 
     statement = f"""
-    CREATE TRIGGER {trigger_name} AFTER {event} ON {table}
+    CREATE TRIGGER "{trigger_name}" AFTER {event} ON "{table}"
     BEGIN
-        INSERT INTO {history_table} (tblname, rowname, operation, newval, oldval)
-        VALUES ('{table}', {rowname}, '{event[:1]}', json({newval}), json({oldval}));
-    END;
+        INSERT INTO "{history_table}" ("source", "subject", "type", "data")
+        VALUES ('{table}', {rowname}, '{event_type}', {data});
+    END
     """
     cursor.execute(statement)
 
 
 def _create_indices(db: sqlite3.Connection, history_table: str) -> None:
-    # Support querying the history of a particular record:
-    # SELECT * from _audite_history WHERE (tablename, rowname) = ('post', '123')
+    # Support querying the history of a particular subject:
+    # SELECT * from _audite_history WHERE (source, subject) = ('post', '123')
     db.execute(
         f"""
-        CREATE INDEX IF NOT EXISTS {history_table}_tblname_rowname_position_idx
-        ON {history_table} (tblname, rowname, position)
+        CREATE INDEX IF NOT EXISTS "{history_table}_source_subject_id_idx"
+        ON "{history_table}" (source, subject, id)
         """
     )
 
     # Support querying by timestamp:
-    # SELECT * from _audite_history WHERE changed_at > 123 AND changed_at < 456;
+    # SELECT * from _audite_history WHERE time > '2022-11-19'
     db.execute(
         f"""
-        CREATE INDEX IF NOT EXISTS {history_table}_changed_at_position_idx
-        ON {history_table} (changed_at, position)
+        CREATE INDEX IF NOT EXISTS "{history_table}_time_id_idx"
+        ON "{history_table}" (time, id)
         """
     )
 
