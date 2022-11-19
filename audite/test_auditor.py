@@ -90,14 +90,22 @@ def test_it_supports_compound_primary_keys(db: sqlite3.Connection) -> None:
         """
     )
     track_changes(db)
+
     db.execute(
         """
         INSERT INTO "namespace.with_compound_pk" (this, that, other, etc)
         VALUES ('hello','world', 1, 3.14159)
         """
     )
-    history = list(db.execute("SELECT subject FROM _audite_history"))
-    assert history == [("hello:world:1:3.14159",)]
+    history = list(db.execute("SELECT source, type, subject FROM _audite_history"))
+
+    assert history == [
+        (
+            "namespace.with_compound_pk",
+            "namespace.with_compound_pk.created",
+            "hello:world:1:3.14159",
+        )
+    ]
 
 
 def test_it_does_not_miss_messages_when_recreating_tables_and_triggers(
