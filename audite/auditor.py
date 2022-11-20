@@ -1,32 +1,48 @@
 import sqlite3
 import typing as t
 
-HISTORY_TABLE = "_audite_history"
+CLOUDEVENT_SPECVERSION = "1.0"
+TABLE_NAME = "audite_changelog"
+VIEW_NAME = "audite_cloudevents"
 
 
 class Event(t.NamedTuple):
-    id: int
+    position: int
     source: str
     subject: str
     type: str
-    time: str
+    time: int
     specversion: str
     data: str
 
 
-def _gen_audit_table_ddl(table_name: str) -> str:
-    ddl = f"""
-    CREATE TABLE IF NOT EXISTS "{table_name}" (
+def _gen_audit_table_ddl() -> list[str]:
+    table_ddl = f"""
+    CREATE TABLE IF NOT EXISTS "{TABLE_NAME}" (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         source TEXT NOT NULL,
         subject TEXT NOT NULL,
         type TEXT NOT NULL,
-        time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S+00:00')),
+        time INTEGER NOT NULL DEFAULT (strftime('%s')),
         specversion TEXT NOT NULL,
         data JSON
     );
     """
-    return ddl
+    view_ddl = f"""
+    CREATE VIEW IF NOT EXISTS "{VIEW_NAME}" AS
+    SELECT *, json_object(
+        'id', CAST(id AS TEXT),
+        'source', source,
+        'subject', subject,
+        'type', type,
+        'time', strftime('%Y-%m-%dT%H:%M:%S+00:00', datetime(time, 'unixepoch')),
+        'specversion', specversion,
+        'datacontenttype', 'application/json',
+        'data', json(data)
+    ) cloudevent
+    FROM "{TABLE_NAME}"
+    """
+    return [table_ddl, view_ddl]
 
 
 def _json_object_sql(ref: t.Literal["OLD", "NEW"], cols: t.List[str]) -> str:
@@ -55,9 +71,7 @@ def _build_newval_oldval_sql(cols: t.List[str], event: str) -> str:
     raise ValueError(f"{event} is not one of INSERT, UPDATE, or DELETE")
 
 
-def _track_table(
-    db: sqlite3.Connection, table: str, event: str, history_table: str
-) -> None:
+def _track_table(db: sqlite3.Connection, table: str, event: str) -> None:
     cursor = db.cursor()
     record_ref = "OLD" if event == "DELETE" else "NEW"
     trigger_name = f"_audite_audit_{table}_{event.lower()}_trigger"
@@ -71,10 +85,10 @@ def _track_table(
     key_columns = [f"{record_ref}.{f[0]}" for f in fields if f[1] > 0]
     all_columns = [field[0] for field in fields]
 
-    # for tables with a single-column primary key, rowname is just the primary
+    # for tables with a single-column primary key, subject is just the primary
     # key as text. for compound primary keys, concatenate each key separated by
     # ':', so that e.g. (1,) becomes '1' and (1, 'abc') becomes '1:abc'
-    rowname = " || ':' || ".join(key_columns)
+    subject = " || ':' || ".join(key_columns)
 
     data = _build_newval_oldval_sql(all_columns, event)
 
@@ -88,21 +102,23 @@ def _track_table(
     statement = f"""
     CREATE TRIGGER "{trigger_name}" AFTER {event} ON "{table}"
     BEGIN
-        INSERT INTO "{history_table}"
+        INSERT INTO "{TABLE_NAME}"
         ("source", "subject", "type", "specversion", "data")
-        VALUES ('{table}', {rowname}, '{event_type}', '1.0', {data});
+        VALUES (
+        '{table}', {subject}, '{event_type}', '{CLOUDEVENT_SPECVERSION}', {data}
+        );
     END
     """
     cursor.execute(statement)
 
 
-def _create_indices(db: sqlite3.Connection, history_table: str) -> None:
+def _create_indices(db: sqlite3.Connection) -> None:
     # Support querying the history of a particular subject:
-    # SELECT * from _audite_history WHERE (source, subject) = ('post', '123')
+    # SELECT * from audite_events WHERE (source, subject) = ('post', '123')
     db.execute(
         f"""
-        CREATE INDEX IF NOT EXISTS "{history_table}_source_subject_id_idx"
-        ON "{history_table}" (source, subject, id)
+        CREATE INDEX IF NOT EXISTS "{TABLE_NAME}_source_subject_id_idx"
+        ON "{TABLE_NAME}" (source, subject, id)
         """
     )
 
@@ -110,15 +126,14 @@ def _create_indices(db: sqlite3.Connection, history_table: str) -> None:
     # SELECT * from _audite_history WHERE time > '2022-11-19'
     db.execute(
         f"""
-        CREATE INDEX IF NOT EXISTS "{history_table}_time_id_idx"
-        ON "{history_table}" (time, id)
+        CREATE INDEX IF NOT EXISTS "{TABLE_NAME}_time_id_idx"
+        ON "{TABLE_NAME}" (time, id)
         """
     )
 
 
 def track_changes(
     db: sqlite3.Connection,
-    history_table: str = HISTORY_TABLE,
     tables: t.Optional[t.List[str]] = None,
     autoindex: bool = True,
 ) -> None:
@@ -130,8 +145,11 @@ def track_changes(
                 "transaction in progress. COMMIT or ROLLBACK and try again."
             )
             raise sqlite3.ProgrammingError(msg)
+
         db.execute("BEGIN")
-        db.execute(_gen_audit_table_ddl(history_table))
+
+        for statement in _gen_audit_table_ddl():
+            db.execute(statement)
 
         if tables is None:
             tables = [
@@ -140,20 +158,15 @@ def track_changes(
                     """
                     SELECT tbl_name FROM sqlite_master
                     WHERE type='table' AND tbl_name NOT LIKE 'sqlite%'
-                    AND tbl_name != :history_table
+                    AND tbl_name != :audite_table
                     """,
-                    {"history_table": history_table},
+                    {"audite_table": TABLE_NAME},
                 )
             ]
 
         for table in tables:
             for event in events:
-                _track_table(
-                    db,
-                    table=table,
-                    event=event,
-                    history_table=history_table,
-                )
+                _track_table(db, table=table, event=event)
 
         if autoindex:
-            _create_indices(db, history_table)
+            _create_indices(db)
