@@ -2,7 +2,7 @@ import sqlite3
 import typing as t
 
 CLOUDEVENT_SPECVERSION = "1.0"
-TABLE_NAME = "audite_changelog"
+TABLE_NAME = "audite_history"
 VIEW_NAME = "audite_cloudevents"
 
 
@@ -74,7 +74,7 @@ def _build_newval_oldval_sql(cols: t.List[str], event: str) -> str:
 def _track_table(db: sqlite3.Connection, table: str, event: str) -> None:
     cursor = db.cursor()
     record_ref = "OLD" if event == "DELETE" else "NEW"
-    trigger_name = f"_audite_audit_{table}_{event.lower()}_trigger"
+    trigger_name = f"audite_audit_{table}_{event.lower()}_trigger"
 
     cursor.execute(f"DROP TRIGGER IF exists {trigger_name}")
 
@@ -114,7 +114,7 @@ def _track_table(db: sqlite3.Connection, table: str, event: str) -> None:
 
 def _create_indices(db: sqlite3.Connection) -> None:
     # Support querying the history of a particular subject:
-    # SELECT * from audite_events WHERE (source, subject) = ('post', '123')
+    # SELECT * from audite_history WHERE (source, subject) = ('post', '123')
     db.execute(
         f"""
         CREATE INDEX IF NOT EXISTS "{TABLE_NAME}_source_subject_id_idx"
@@ -123,7 +123,7 @@ def _create_indices(db: sqlite3.Connection) -> None:
     )
 
     # Support querying by timestamp:
-    # SELECT * from _audite_history WHERE time > '2022-11-19'
+    # SELECT * from audite_history WHERE time > 1668982601
     db.execute(
         f"""
         CREATE INDEX IF NOT EXISTS "{TABLE_NAME}_time_id_idx"
