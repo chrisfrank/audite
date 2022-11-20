@@ -10,6 +10,7 @@ class Event(t.NamedTuple):
     subject: str
     type: str
     time: str
+    specversion: str
     data: str
 
 
@@ -20,8 +21,9 @@ def _gen_audit_table_ddl(table_name: str) -> str:
         source TEXT NOT NULL,
         subject TEXT NOT NULL,
         type TEXT NOT NULL,
-        data JSON,
-        time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S+00:00'))
+        time TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S+00:00')),
+        specversion TEXT NOT NULL,
+        data JSON
     );
     """
     return ddl
@@ -86,8 +88,9 @@ def _track_table(
     statement = f"""
     CREATE TRIGGER "{trigger_name}" AFTER {event} ON "{table}"
     BEGIN
-        INSERT INTO "{history_table}" ("source", "subject", "type", "data")
-        VALUES ('{table}', {rowname}, '{event_type}', {data});
+        INSERT INTO "{history_table}"
+        ("source", "subject", "type", "specversion", "data")
+        VALUES ('{table}', {rowname}, '{event_type}', '1.0', {data});
     END
     """
     cursor.execute(statement)

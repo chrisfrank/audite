@@ -48,7 +48,7 @@ def test_it_audits_insert_update_and_delete_on_all_tables_by_default(
         Event(*row)
         for row in db.execute(
             """
-            SELECT id, source, subject, type, time, data
+            SELECT id, source, subject, type, time, specversion, data
             from _audite_history ORDER BY id
             """
         )
@@ -215,12 +215,13 @@ def test_it_conforms_to_the_cloudevents_spec(db: sqlite3.Connection) -> None:
                 "subject": row[2],
                 "type": row[3],
                 "time": row[4],
+                "specversion": row[5],
             },
-            data=json.loads(row[5]),
+            data=json.loads(row[6]),
         )
         for row in db.execute(
             """
-            SELECT CAST(id AS TEXT) id, source, subject, type, time, data
+            SELECT CAST(id AS TEXT) id, source, subject, type, time, specversion, data
             from _audite_history ORDER BY id
             """
         )
