@@ -16,7 +16,7 @@ class Event(t.NamedTuple):
     data: str
 
 
-def _gen_ddl() -> list[str]:
+def _gen_ddl() -> t.List[str]:
     table_ddl = f"""
     CREATE TABLE IF NOT EXISTS "{TABLE_NAME}" (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
