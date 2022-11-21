@@ -1,28 +1,24 @@
-# Audite
+# Audite: automatic change auditing for SQLite
 
-Audite uses SQLite triggers to automatically log all INSERT, UPDATE, and
-DELETE operations on a target SQLite database. It gives you a comprehensive,
-totally-ordered history of all changes to your data, without touching your
-application code or running an extra process.
+Audite uses SQL triggers to automatically log all INSERT, UPDATE, and DELETE
+operations on a target SQLite database. It gives you a totally-ordered history
+of all changes to your data without touching your application code or running
+an extra process.
 
 ## Example
 
 Let's create `shop.db`, a database with the following schema:
 
 ```sh
-sqlite3 shop.db "CREATE TABLE IF NOT EXISTS products (name TEXT PRIMARY KEY, price REAL NOT NULL);"
+sqlite3 shop.db "CREATE TABLE IF NOT EXISTS products (name TEXT PRIMARY KEY, price REAL NOT NULL)"
 ```
 
-### Step 1: Enable the audite triggers
+### Step 1: Enable auditing via the audite CLI
 You only need to do this once per database/schema:
 
 ```sh
 python3 -m audite shop.db
 ```
-It's safe to run audite multiple times, for example as part of your app's
-startup script. When the database schema hasn't changed, then re-running
-audite is effectively a noop; when the schema _has_ changed, then re-running
-audite will ensure that incoming change events use your latest schema.
 
 ### Step 2: Create, Update, and Delete some data
 This example uses the `sqlite3` CLI to make changes, but any interface into
@@ -31,13 +27,14 @@ your SQLite database should work.
 Add some products:
 ```sh
 sqlite3 shop.db "INSERT INTO products (name, price) VALUES ('notebook', 2.99), ('pen', 0.25)"
+```
 
 Adjust for inflation:
 ```sh
 sqlite3 shop.db "UPDATE products SET price = ROUND(price * 1.1, 2)"
 ```
 
-Pens have gone out of stock:
+Whoops, we sold out of pens:
 ```sh
 sqlite3 shop.db "DELETE FROM products WHERE name = 'pen'"
 ```
@@ -66,7 +63,7 @@ id  source    subject   type              time        specversion  data
 - `type` describes the type of change: `*.created`, `*.updated`, or `*.deleted`.
 - `time` is the unix epoch timestamp when the change was committed.
 - `specversion` is the verion of the [CloudEvents spec](https://github.com/cloudevents/spec) in use, currently `1.0`.
-- `data` is a JSON snapshot of the row that changed. The `data.new` object holds the post-change values and is present for `*.created` and `*.updated` events. The `data.old` object holds pre-change values is present for `*.updated` and `*.deleted` events.
+- `data` is a JSON snapshot of the row that changed. The `data.new` object holds the post-change values and is present for `*.created` and `*.updated` events. The `data.old` object holds pre-change values and is present for `*.updated` and `*.deleted` events.
 
 The event schema follows the [CloudEvents
 spec](https://github.com/cloudevents/spec) with two exceptions: `id` and `time`
@@ -79,3 +76,9 @@ you can query the `audite_cloudevents` view instead of the underlying
 ```sh
 sqlite3 shop.db "SELECT id, cloudevent FROM audite_cloudevents ORDER BY id"
 ```
+
+## Handling database schema changes
+It's safe to run `python3 -m audite` multiple times, including as part of your
+app's startup script. When your database schema hasn't changed, then re-running
+audite is effectively a noop; when your schema _has_ changed, then re-running
+audite will ensure that incoming changes are saved with the latest schema.
