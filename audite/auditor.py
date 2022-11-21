@@ -158,10 +158,10 @@ def track_changes(
                 for row in db.execute(
                     """
                     SELECT tbl_name FROM sqlite_master
-                    WHERE type='table' AND tbl_name NOT LIKE 'sqlite%'
-                    AND tbl_name != :audite_table
-                    """,
-                    {"audite_table": TABLE_NAME},
+                    WHERE type='table'
+                    AND tbl_name NOT LIKE 'sqlite_%'
+                    AND tbl_name NOT LIKE 'audite_%'
+                    """
                 )
             ]
 
