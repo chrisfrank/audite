@@ -16,7 +16,7 @@ class Event(t.NamedTuple):
     data: str
 
 
-def _gen_audit_table_ddl() -> list[str]:
+def _gen_ddl() -> list[str]:
     table_ddl = f"""
     CREATE TABLE IF NOT EXISTS "{TABLE_NAME}" (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,6 +32,7 @@ def _gen_audit_table_ddl() -> list[str]:
     CREATE VIEW IF NOT EXISTS "{VIEW_NAME}" AS
     SELECT *, json_object(
         'id', CAST(id AS TEXT),
+        'sequence', printf('%020d', id),
         'source', source,
         'subject', subject,
         'type', type,
@@ -148,7 +149,7 @@ def track_changes(
 
         db.execute("BEGIN")
 
-        for statement in _gen_audit_table_ddl():
+        for statement in _gen_ddl():
             db.execute(statement)
 
         if tables is None:

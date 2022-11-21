@@ -199,6 +199,9 @@ def test_it_conforms_to_the_cloudevents_spec(db: sqlite3.Connection) -> None:
 
     # id should be a string
     assert events[0]["id"] == "1"
+    # sequence should be the same 'number' as id but with enough zero-padding
+    # to account for all the largest 64-bit unsigned integer
+    assert events[0]["sequence"] == "00000000000000000001"
     # time should be parsable as ISO-8601
     assert datetime.datetime.fromisoformat(events[0]["time"])
 
