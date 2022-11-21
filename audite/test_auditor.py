@@ -64,15 +64,15 @@ def test_it_audits_insert_update_and_delete_on_all_tables_by_default(
     ]
 
     first_post_json = json.loads(history[0].data or "{}")
-    assert first_post_json["values"]["id"] == 1
-    assert first_post_json["values"]["content"] == "first"
+    assert first_post_json["row"]["id"] == 1
+    assert first_post_json["row"]["content"] == "first"
 
     last_post_json = json.loads(history[-1].data or "{}")
-    assert last_post_json["values"]["content"] == "second"
+    assert last_post_json["row"]["content"] == "second"
 
     update = [row for row in history if row.type == "comment.updated"][0]
-    assert json.loads(update.data or "")["values"]["content"] == "revised"
-    assert json.loads(update.data or "")["oldvalues"]["content"] == "first comment"
+    assert json.loads(update.data or "")["row"]["content"] == "revised"
+    assert json.loads(update.data or "")["oldrow"]["content"] == "first comment"
 
 
 def test_it_supports_compound_primary_keys(db: sqlite3.Connection) -> None:
@@ -155,7 +155,7 @@ def test_it_follows_schema_changes(db: sqlite3.Connection) -> None:
         db.execute("INSERT INTO not_yet_audited (value) VALUES ('audited now')")
 
     events = list(db.execute("SELECT data FROM audite_history"))
-    changes = [json.loads(row[0] or "{}")["values"] for row in events]
+    changes = [json.loads(e[0] or "{}")["row"] for e in events]
 
     assert changes[0]["content"] == "before"
     assert "version" not in changes[0]
@@ -209,7 +209,7 @@ def test_it_conforms_to_the_cloudevents_spec(db: sqlite3.Connection) -> None:
     assert events[0]["subject"] == "1"
     assert events[0]["specversion"] == "1.0"
     assert events[0]["type"] == "post.created"
-    assert events[0].data["values"]["content"] == "p1"
+    assert events[0].data["row"]["content"] == "p1"
 
     # filtering by id with a string should work
     q = "SELECT cloudevent FROM audite_cloudevents WHERE id > :offset"

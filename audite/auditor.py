@@ -60,14 +60,14 @@ def _json_object_sql(ref: t.Literal["OLD", "NEW"], cols: t.List[str]) -> str:
 
 def _build_newval_oldval_sql(cols: t.List[str], event: str) -> str:
     if event == "DELETE":
-        return f"json_object('values', {_json_object_sql('OLD', cols)})"
+        return f"json_object('row', {_json_object_sql('OLD', cols)})"
     elif event == "UPDATE":
         return (
-            f"json_object('values', {_json_object_sql('NEW', cols)}, "
-            f"'oldvalues', {_json_object_sql('OLD', cols)})"
+            f"json_object('row', {_json_object_sql('NEW', cols)}, "
+            f"'oldrow', {_json_object_sql('OLD', cols)})"
         )
     elif event == "INSERT":
-        return f"json_object('values', {_json_object_sql('NEW', cols)})"
+        return f"json_object('row', {_json_object_sql('NEW', cols)})"
 
     raise ValueError(f"{event} is not one of INSERT, UPDATE, or DELETE")
 
