@@ -115,6 +115,7 @@ def test_it_supports_all_sqlite_data_types(db: sqlite3.Connection) -> None:
 
     id_ = uuid.UUID("72c1b622-1a92-4735-b15d-5a0cd34e6dcc")
     db.execute(dml, (1, (2 / 3), "1", id_.bytes))
+    db.execute(dml, (None, None, None, None))
 
     events = list(db.execute("SELECT data FROM audite_history"))
     changes = [json.loads(e[0] or "{}")["new"] for e in events]
@@ -123,6 +124,10 @@ def test_it_supports_all_sqlite_data_types(db: sqlite3.Connection) -> None:
     assert changes[0]["dec"] == 0.666666666666667
     assert changes[0]["txt"] == "1"
     assert changes[0]["raw"] == "72C1B6221A924735B15D5A0CD34E6DCC"
+
+    assert changes[1]["dec"] is None
+    assert changes[1]["raw"] is None
+    assert changes[1]["txt"] is None
 
 
 def test_it_does_not_miss_messages_when_recreating_tables_and_triggers(
