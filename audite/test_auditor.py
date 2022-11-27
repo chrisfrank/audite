@@ -124,6 +124,7 @@ def test_it_supports_all_sqlite_data_types(db: sqlite3.Connection) -> None:
     assert changes[0]["dec"] == 0.666666666666667
     assert changes[0]["txt"] == "1"
     assert changes[0]["raw"] == "72C1B6221A924735B15D5A0CD34E6DCC"
+    assert uuid.UUID(changes[0]["raw"]) == id_
 
     assert changes[1]["dec"] is None
     assert changes[1]["raw"] is None
