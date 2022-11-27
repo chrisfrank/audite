@@ -53,9 +53,13 @@ def _json_object_sql(ref: t.Literal["OLD", "NEW"], cols: t.List[str]) -> str:
 
     https://www.sqlite.org/json1.html#jobj
     """
+    pairs: t.List[str] = []
+    for col in cols:
+        key, val = f"'{col}', ", f'{ref}."{col}"'
+        safeval = f"CASE WHEN typeof({val}) = 'blob' THEN hex({val}) ELSE {val} END"
+        pairs.append(key + safeval)
 
-    sql = "json_object(" + ", ".join([f"'{col}', {ref}.{col}" for col in cols]) + ")"
-    return sql
+    return "json_object(" + ", ".join(pairs) + ")"
 
 
 def _build_newval_oldval_sql(cols: t.List[str], event: str) -> str:
@@ -80,7 +84,8 @@ def _track_table(db: sqlite3.Connection, table: str, event: str) -> None:
     cursor.execute(f"DROP TRIGGER IF exists {trigger_name}")
 
     fields = cursor.execute(
-        "SELECT name, pk FROM PRAGMA_TABLE_INFO(:table) order by pk", {"table": table}
+        "SELECT name, pk FROM PRAGMA_TABLE_INFO(:table) order by pk",
+        {"table": table},
     ).fetchall()
 
     key_columns = [f"{record_ref}.{f[0]}" for f in fields if f[1] > 0]

@@ -5,6 +5,7 @@ import sqlite3
 import subprocess
 import tempfile
 import typing as t
+import uuid
 
 import cloudevents.http  # type: ignore
 import pytest
@@ -104,6 +105,24 @@ def test_it_supports_compound_primary_keys(db: sqlite3.Connection) -> None:
             "hello:world:1:3.14159",
         )
     ]
+
+
+def test_it_supports_all_sqlite_data_types(db: sqlite3.Connection) -> None:
+    ddl = "CREATE TABLE t (int INTEGER PRIMARY KEY, dec REAL, txt TEXT, raw BLOB)"
+    db.execute(ddl)
+    track_changes(db)
+    dml = "INSERT INTO t (int, dec, txt, raw) VALUES (?, ?, ?, ?)"
+
+    id_ = uuid.UUID("72c1b622-1a92-4735-b15d-5a0cd34e6dcc")
+    db.execute(dml, (1, (2 / 3), "1", id_.bytes))
+
+    events = list(db.execute("SELECT data FROM audite_history"))
+    changes = [json.loads(e[0] or "{}")["new"] for e in events]
+
+    assert changes[0]["int"] == 1
+    assert changes[0]["dec"] == 0.666666666666667
+    assert changes[0]["txt"] == "1"
+    assert changes[0]["raw"] == "72C1B6221A924735B15D5A0CD34E6DCC"
 
 
 def test_it_does_not_miss_messages_when_recreating_tables_and_triggers(
