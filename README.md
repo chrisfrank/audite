@@ -1,84 +1,98 @@
-# Audite: automatic change auditing for SQLite
+# Audite: instant Change Data Capture for SQLite
 
-Audite uses SQL triggers to automatically log all INSERT, UPDATE, and DELETE
-operations on a target SQLite database. It gives you a totally-ordered history
-of all changes to your data without touching your application code or running
-an extra process.
+Audite uses SQL triggers to add a transactional change feed to any SQLite
+database. It gives you a totally-ordered history of all changes to your data,
+without touching your application code or running an extra process.
 
-## Example
+## Use cases
+- Track what changed when
+- Restore previous versions of changed rows
+- Replicate data to external systems by streaming the change feed
 
-Let's create `shop.db`, a database with the following schema:
+## Quick start
 
-```sh
-sqlite3 shop.db "CREATE TABLE IF NOT EXISTS products (name TEXT PRIMARY KEY, price REAL NOT NULL)"
-```
-
-### Step 1: Enable auditing via the audite CLI
-You only need to do this once per database/schema:
+Let's add a changefeed to `todo.db`, a SQLite database with the following schema:
 
 ```sh
-python3 -m audite shop.db
+sqlite3 todo.db "CREATE TABLE task (name TEXT PRIMARY KEY, done BOOLEAN NOT NULL DEFAULT FALSE)"
 ```
 
-### Step 2: Create, Update, and Delete some data
-This example uses the `sqlite3` CLI to make changes, but any interface into
-your SQLite database should work.
+1. **Install audite on your sytem**
+    ```sh
+    python3 -m pip install audite
+    ```
+2. **Enable audite on your database**
+    ```sh
+    python3 -m audite todo.db
+    ```
 
-Add some products:
-```sh
-sqlite3 shop.db "INSERT INTO products (name, price) VALUES ('notebook', 2.99), ('pen', 0.25)"
-```
+Done! Now any process can INSERT, UPDATE, and DELETE from your DB as usual, and
+audite's triggers will log these operations as [change events](#event-schema)
+in the `audite_history` table. All (and only) committed transactions will
+appear in the history. You only need to apply audite once per database/schema.
 
-Adjust for inflation:
-```sh
-sqlite3 shop.db "UPDATE products SET price = ROUND(price * 1.1, 2)"
-```
+## Modfying data and querying the change feed
 
-Whoops, we sold out of pens:
-```sh
-sqlite3 shop.db "DELETE FROM products WHERE name = 'pen'"
-```
-
-### Step 3: Query the event history
+We'll add two tasks...
 
 ```sh
-sqlite3 shop.db "SELECT * FROM audite_history ORDER BY id"
+sqlite3 todo.db "INSERT INTO task (name) VALUES ('try audite'), ('profit')"
 ```
 
-You should get back something like:
-```
-id  source    subject   type              time        specversion  data
---  --------  --------  ----------------  ----------  -----------  -------------------------------------------------------------------------------
-1   products  notebook  products.created  1669046846  1.0          {"new":{"price":2.99,"name":"notebook"}}
-2   products  pen       products.created  1669046846  1.0          {"new":{"price":0.25,"name":"pen"}}
-3   products  notebook  products.updated  1669046866  1.0          {"new":{"price":3.29,"name":"notebook"},"old":{"price":2.99,"name":"notebook"}}
-4   products  pen       products.updated  1669046866  1.0          {"new":{"price":0.28,"name":"pen"},"old":{"price":0.25,"name":"pen"}}
-5   products  pen       products.deleted  1669046885  1.0          {"old":{"price":0.28,"name":"pen"}}
+cross one off the list...
+```sh
+sqlite3 todo.db "UPDATE task SET done = TRUE WHERE name = 'try audite'"
 ```
 
-#### Event Schema
+and cancel the other:
+```sh
+sqlite3 todo.db "DELETE FROM task WHERE name = 'profit'"
+```
+
+### Now let's see what changed:
+```sh
+sqlite3 todo.db "SELECT * FROM audite_history ORDER BY id"
+```
+
+You should get back something like this:
+```
+id  source  subject     type          time        specversion  data
+--  ------  ----------  ------------  ----------  -----------  ---------------------------------------------------------------------------
+1   task    try audite  task.created  1669687674  1.0          {"new":{"done":0,"name":"try audite"}}
+2   task    profit      task.created  1669687674  1.0          {"new":{"done":0,"name":"profit"}}
+3   task    try audite  task.updated  1669687683  1.0          {"new":{"done":1,"name":"try audite"},"old":{"done":0,"name":"try audite"}}
+4   task    profit      task.deleted  1669687690  1.0          {"old":{"done":0,"name":"profit"}}
+```
+
+## Event Schema
+The event schema follows the [CloudEvents
+spec](https://github.com/cloudevents/spec) so that other systems can easily
+handle events from yours.
+
 - `id` uniquely identifies the event.
 - `source` is name of the database table that changed.
 - `subject` is the primary key of the database row that changed.
 - `type` describes the type of change: `*.created`, `*.updated`, or `*.deleted`.
-- `time` is the unix epoch timestamp when the change was committed.
+- `time` is the Unix time when the change was committed.
 - `specversion` is the verion of the [CloudEvents spec](https://github.com/cloudevents/spec) in use, currently `1.0`.
 - `data` is a JSON snapshot of the row that changed. The `data.new` object holds the post-change values and is present for `*.created` and `*.updated` events. The `data.old` object holds pre-change values and is present for `*.updated` and `*.deleted` events.
 
-The event schema follows the [CloudEvents
-spec](https://github.com/cloudevents/spec) with two exceptions: `id` and `time`
-are integers instead of strings so that SQLite can store and sort them
-efficiently. To conform exactly to the [CloudEvents JSON
-spec](https://github.com/cloudevents/spec/blob/main/cloudevents/formats/json-format.md#23-examples),
-you can query the `audite_cloudevents` view instead of the underlying
-`audite_history` table:
+**Note:** Audite stores `id` and `time` as integers so that SQLite can store
+and sort them efficiently, but the CloudEvents spec mandates strings. To query
+events that conform exactly to the spec, select rows as JSON from the
+`audite_cloudevents` view instead of the underlying `audite_history` table:
 
 ```sh
-sqlite3 shop.db "SELECT id, cloudevent FROM audite_cloudevents ORDER BY id"
+sqlite3 todo.db "SELECT cloudevent FROM audite_cloudevents ORDER BY id"
+
+{"id":"1","sequence":"00000000000000000001","source":"task","subject":"try audite","type":"task.created","time":"2022-11-29T02:07:54+00:00","specversion":"1.0","datacontenttype":"application/json","data":{"new":{"done":0,"name":"try audite"}}}
+{"id":"2","sequence":"00000000000000000002","source":"task","subject":"profit","type":"task.created","time":"2022-11-29T02:07:54+00:00","specversion":"1.0","datacontenttype":"application/json","data":{"new":{"done":0,"name":"profit"}}}
+{"id":"3","sequence":"00000000000000000003","source":"task","subject":"try audite","type":"task.updated","time":"2022-11-29T02:08:03+00:00","specversion":"1.0","datacontenttype":"application/json","data":{"new":{"done":1,"name":"try audite"},"old":{"done":0,"name":"try audite"}}}
+{"id":"4","sequence":"00000000000000000004","source":"task","subject":"profit","type":"task.deleted","time":"2022-11-29T02:08:10+00:00","specversion":"1.0","datacontenttype":"application/json","data":{"old":{"done":0,"name":"profit"}}}
 ```
 
 ## Handling database schema changes
 It's safe to run `python3 -m audite` multiple times, including as part of your
 app's startup script. When your database schema hasn't changed, then re-running
-audite is effectively a noop; when your schema _has_ changed, then re-running
-audite will ensure that incoming changes are saved with the latest schema.
+audite does nothing. And when your schema has changed, then re-running audite
+ensures that incoming changes are tracked with the latest schema.
