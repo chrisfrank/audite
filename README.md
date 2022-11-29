@@ -14,7 +14,11 @@ without touching your application code or running an extra process.
 Let's add a changefeed to `todo.db`, a SQLite database with the following schema:
 
 ```sh
-sqlite3 todo.db "CREATE TABLE task (name TEXT PRIMARY KEY, done BOOLEAN NOT NULL DEFAULT FALSE)"
+sqlite3 todo.db "CREATE TABLE project (id INTEGER PRIMARY KEY, name TEXT)"
+sqlite3 todo.db "CREATE TABLE task (
+    name TEXT PRIMARY KEY,
+    project_id INTEGER REFERENCES project (project_id),
+    done BOOLEAN NOT NULL DEFAULT FALSE)"
 ```
 
 1. **Install audite on your sytem**
@@ -33,10 +37,11 @@ appear in the history. You only need to apply audite once per database/schema.
 
 ## Modfying data and querying the change feed
 
-We'll add two tasks...
+We'll add a project and two tasks...
 
 ```sh
-sqlite3 todo.db "INSERT INTO task (name) VALUES ('try audite'), ('profit')"
+sqlite3 todo.db "INSERT INTO project (id, name) VALUES (1, 'goals')"
+sqlite3 todo.db "INSERT INTO task (project_id, name) VALUES (1, 'try audite'), (1, 'profit')"
 ```
 
 cross one off the list...
@@ -56,12 +61,13 @@ sqlite3 todo.db "SELECT * FROM audite_history ORDER BY id"
 
 You should get back something like this:
 ```
-id  source  subject     type          time        specversion  data
---  ------  ----------  ------------  ----------  -----------  ---------------------------------------------------------------------------
-1   task    try audite  task.created  1669687674  1.0          {"new":{"done":0,"name":"try audite"}}
-2   task    profit      task.created  1669687674  1.0          {"new":{"done":0,"name":"profit"}}
-3   task    try audite  task.updated  1669687683  1.0          {"new":{"done":1,"name":"try audite"},"old":{"done":0,"name":"try audite"}}
-4   task    profit      task.deleted  1669687690  1.0          {"old":{"done":0,"name":"profit"}}
+id  source   subject     type             time        specversion  data                                                                                                     
+--  -------  ----------  ---------------  ----------  -----------  ---------------------------------------------------------------------------------------------------------
+1   project  1           project.created  1669730365  1.0          {"new":{"name":"goals","id":1}}                                                                          
+2   task     try audite  task.created     1669730374  1.0          {"new":{"project_id":1,"done":0,"name":"try audite"}}                                                    
+3   task     profit      task.created     1669730374  1.0          {"new":{"project_id":1,"done":0,"name":"profit"}}                                                        
+4   task     try audite  task.updated     1669730381  1.0          {"new":{"project_id":1,"done":1,"name":"try audite"},"old":{"project_id":1,"done":0,"name":"try audite"}}
+5   task     profit      task.deleted     1669730386  1.0          {"old":{"project_id":1,"done":0,"name":"profit"}}                                                        
 ```
 
 ## Event Schema
@@ -79,20 +85,29 @@ handle events from yours.
 
 **Note:** Audite stores `id` and `time` as integers so that SQLite can store
 and sort them efficiently, but the CloudEvents spec mandates strings. To query
-events that conform exactly to the spec, select rows as JSON from the
-`audite_cloudevents` view instead of the underlying `audite_history` table:
+events that conform exactly to the [CloudEvents JSON
+spec](https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/formats/json-format.md),
+select from the `audite_cloudevents` view instead of the underlying
+`audite_history` table:
 
 ```sh
 sqlite3 todo.db "SELECT cloudevent FROM audite_cloudevents ORDER BY id"
-
-{"id":"1","sequence":"00000000000000000001","source":"task","subject":"try audite","type":"task.created","time":"2022-11-29T02:07:54+00:00","specversion":"1.0","datacontenttype":"application/json","data":{"new":{"done":0,"name":"try audite"}}}
-{"id":"2","sequence":"00000000000000000002","source":"task","subject":"profit","type":"task.created","time":"2022-11-29T02:07:54+00:00","specversion":"1.0","datacontenttype":"application/json","data":{"new":{"done":0,"name":"profit"}}}
-{"id":"3","sequence":"00000000000000000003","source":"task","subject":"try audite","type":"task.updated","time":"2022-11-29T02:08:03+00:00","specversion":"1.0","datacontenttype":"application/json","data":{"new":{"done":1,"name":"try audite"},"old":{"done":0,"name":"try audite"}}}
-{"id":"4","sequence":"00000000000000000004","source":"task","subject":"profit","type":"task.deleted","time":"2022-11-29T02:08:10+00:00","specversion":"1.0","datacontenttype":"application/json","data":{"old":{"done":0,"name":"profit"}}}
+```
+```
+cloudevent                                                                                                                                                                                                                                                                                                            
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+{"id":"1","sequence":"00000000000000000001","source":"project","subject":"1","type":"project.created","time":"2022-11-29T13:59:25+00:00","specversion":"1.0","datacontenttype":"application/json","data":{"new":{"name":"goals","id":1}}}                                                                             
+{"id":"2","sequence":"00000000000000000002","source":"task","subject":"try audite","type":"task.created","time":"2022-11-29T13:59:34+00:00","specversion":"1.0","datacontenttype":"application/json","data":{"new":{"project_id":1,"done":0,"name":"try audite"}}}                                                    
+{"id":"3","sequence":"00000000000000000003","source":"task","subject":"profit","type":"task.created","time":"2022-11-29T13:59:34+00:00","specversion":"1.0","datacontenttype":"application/json","data":{"new":{"project_id":1,"done":0,"name":"profit"}}}                                                            
+{"id":"4","sequence":"00000000000000000004","source":"task","subject":"try audite","type":"task.updated","time":"2022-11-29T13:59:41+00:00","specversion":"1.0","datacontenttype":"application/json","data":{"new":{"project_id":1,"done":1,"name":"try audite"},"old":{"project_id":1,"done":0,"name":"try audite"}}}
+{"id":"5","sequence":"00000000000000000005","source":"task","subject":"profit","type":"task.deleted","time":"2022-11-29T13:59:46+00:00","specversion":"1.0","datacontenttype":"application/json","data":{"old":{"project_id":1,"done":0,"name":"profit"}}}                                                            
 ```
 
 ## Handling database schema changes
-It's safe to run `python3 -m audite` multiple times, including as part of your
-app's startup script. When your database schema hasn't changed, then re-running
-audite does nothing. And when your schema has changed, then re-running audite
-ensures that incoming changes are tracked with the latest schema.
+When your database schema changes, you need to re-run audite for the triggers to
+pick up the latest fields. It's safe to re-run audite multiple times, including
+as part of your schema migration scripts or even on app startup.
+
+When your database schema hasn't changed, then re-running audite does nothing.
+When your schema _has_ changed, then re-running audite rebuilds the triggers to
+write to the change feed with the latest schema.
