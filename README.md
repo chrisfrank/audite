@@ -32,7 +32,7 @@ sqlite3 todo.db "CREATE TABLE task (
 
 Done! Now any process can INSERT, UPDATE, and DELETE from your DB as usual, and
 audite's triggers will log these operations as [change events](#event-schema)
-in the `audite_history` table. All (and only) committed transactions will
+in the `audite_changefeed` table. All (and only) committed transactions will
 appear in the history. You only need to apply audite once per database/schema.
 
 ## Modfying data and querying the change feed
@@ -56,7 +56,7 @@ sqlite3 todo.db "DELETE FROM task WHERE name = 'profit'"
 
 ### Now let's see what changed:
 ```sh
-sqlite3 todo.db "SELECT * FROM audite_history ORDER BY id"
+sqlite3 todo.db "SELECT * FROM audite_changefeed ORDER BY id"
 ```
 
 You should get back something like this:
@@ -88,10 +88,10 @@ and sort them efficiently, but the CloudEvents spec mandates strings. To query
 events that conform exactly to the [CloudEvents JSON
 spec](https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/formats/json-format.md),
 select from the `audite_cloudevents` view instead of the underlying
-`audite_history` table:
+`audite_changefeed` table:
 
 ```sh
-sqlite3 todo.db "SELECT cloudevent FROM audite_cloudevents ORDER BY id"
+sqlite3 todo.db "SELECT cloudevent FROM audite_cloudevent ORDER BY id"
 ```
 ```
 cloudevent                                                                                                                                                                                                                                                                                                            

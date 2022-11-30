@@ -50,7 +50,7 @@ def test_it_audits_insert_update_and_delete_on_all_tables_by_default(
         for row in db.execute(
             """
             SELECT id, source, subject, type, time, specversion, data
-            from audite_history ORDER BY id
+            from audite_changefeed ORDER BY id
             """
         )
     ]
@@ -96,7 +96,7 @@ def test_it_supports_compound_primary_keys(db: sqlite3.Connection) -> None:
         VALUES ('hello','world', 1, 3.14159)
         """
     )
-    history = list(db.execute("SELECT source, type, subject FROM audite_history"))
+    history = list(db.execute("SELECT source, type, subject FROM audite_changefeed"))
 
     assert history == [
         (
@@ -117,7 +117,7 @@ def test_it_supports_all_sqlite_data_types(db: sqlite3.Connection) -> None:
     db.execute(dml, (1, (2 / 3), "1", id_.bytes))
     db.execute(dml, (None, None, None, None))
 
-    events = list(db.execute("SELECT data FROM audite_history"))
+    events = list(db.execute("SELECT data FROM audite_changefeed"))
     changes = [json.loads(e[0] or "{}")["new"] for e in events]
 
     assert changes[0]["int"] == 1
@@ -148,7 +148,7 @@ def test_it_audits_changes_from_external_processes(db: sqlite3.Connection) -> No
     args = ["python3", "-c", "\n".join(script)]
     subprocess.run(args, check=True)
 
-    history = list(db.execute("SELECT source, subject FROM audite_history"))
+    history = list(db.execute("SELECT source, subject FROM audite_changefeed"))
     assert history == [("post", "1")]
 
 
@@ -161,7 +161,7 @@ def test_it_can_audit_only_specified_tables(db: sqlite3.Connection) -> None:
         ('comment.1', 1, 'first comment')
         """
     )
-    history = list(db.execute("SELECT source FROM audite_history"))
+    history = list(db.execute("SELECT source FROM audite_changefeed"))
     assert history == [("post",)]
 
 
@@ -179,7 +179,7 @@ def test_it_follows_schema_changes(db: sqlite3.Connection) -> None:
         db.execute("INSERT INTO post (body, version) VALUES ('after', 2)")
         db.execute("INSERT INTO not_yet_audited (value) VALUES ('audited now')")
 
-    events = list(db.execute("SELECT data FROM audite_history"))
+    events = list(db.execute("SELECT data FROM audite_changefeed"))
     changes = [json.loads(e[0] or "{}")["new"] for e in events]
 
     assert changes[0]["content"] == "before"
@@ -202,7 +202,7 @@ def test_it_raises_when_trying_to_enable_auditing_in_an_already_open_tx(
 
 def test_it_adds_indices_by_default(db: sqlite3.Connection) -> None:
     track_changes(db)
-    idx_name = "audite_history_source_subject_id_idx"
+    idx_name = "audite_changefeed_source_subject_id_idx"
     q = f"SELECT name FROM sqlite_master WHERE type='index' AND name = '{idx_name}'"
 
     idx = db.execute(q).fetchone()[0]
@@ -219,7 +219,7 @@ def test_it_conforms_to_the_cloudevents_spec(db: sqlite3.Connection) -> None:
     track_changes(db)
     db.execute("INSERT INTO post (content) VALUES ('p1'), ('p2'), ('p3');")
 
-    q = "SELECT cloudevent FROM audite_cloudevents ORDER BY id"
+    q = "SELECT cloudevent FROM audite_cloudevent ORDER BY id"
     events = [cloudevents.http.from_json(row[0]) for row in db.execute(q)]
 
     # id should be a string
@@ -237,7 +237,7 @@ def test_it_conforms_to_the_cloudevents_spec(db: sqlite3.Connection) -> None:
     assert events[0].data["new"]["content"] == "p1"
 
     # filtering by id with a string should work
-    q = "SELECT cloudevent FROM audite_cloudevents WHERE id > :offset"
+    q = "SELECT cloudevent FROM audite_cloudevent WHERE id > :offset"
     filtered = [
         cloudevents.http.from_json(row[0])
         for row in db.execute(q, {"offset": events[0]["id"]})
