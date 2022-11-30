@@ -2,8 +2,8 @@ import sqlite3
 import typing as t
 
 CLOUDEVENT_SPECVERSION = "1.0"
-TABLE_NAME = "audite_history"
-VIEW_NAME = "audite_cloudevents"
+TABLE_NAME = "audite_changefeed"
+VIEW_NAME = "audite_cloudevent"
 
 
 class Event(t.NamedTuple):
