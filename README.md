@@ -44,7 +44,7 @@ sqlite3 todo.db "INSERT INTO project (id, name) VALUES (1, 'goals')"
 sqlite3 todo.db "INSERT INTO task (project_id, name) VALUES (1, 'try audite'), (1, 'profit')"
 ```
 
-cross one off the list...
+cross one task off the list...
 ```sh
 sqlite3 todo.db "UPDATE task SET done = TRUE WHERE name = 'try audite'"
 ```
