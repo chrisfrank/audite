@@ -10,7 +10,7 @@ import uuid
 import cloudevents.http  # type: ignore
 import pytest
 
-from .auditor import Event, track_changes
+from audite.auditor import Event, track_changes
 
 
 @pytest.fixture

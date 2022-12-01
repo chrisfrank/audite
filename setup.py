@@ -5,7 +5,7 @@ https://packaging.python.org/guides/distributing-packages-using-setuptools/
 https://github.com/pypa/sampleproject
 """
 
-from setuptools import setup, find_packages
+from setuptools import setup
 import pathlib
 
 here = pathlib.Path(__file__).parent.resolve()
@@ -41,7 +41,7 @@ setup(
         "Programming Language :: Python :: 3 :: Only",
     ],
     keywords="sqlite, audit, history, change-data-capture",
-    packages=find_packages(where="audite"),
+    packages=["audite"],
     install_requires=[],
     python_requires=">=3.7, <4",
     entry_points={
