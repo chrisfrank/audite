@@ -30,8 +30,6 @@ setup(
         # Indicate who your project is intended for
         "Intended Audience :: Developers",
         "Topic :: Software Development :: Build Tools",
-        # Pick your license as you wish
-        "License :: MIT License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
@@ -40,7 +38,7 @@ setup(
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3 :: Only",
     ],
-    keywords="sqlite, audit, history, change-data-capture",
+    keywords="sqlite, audit, history, change-data-capture, change feed",
     packages=["audite"],
     install_requires=[],
     python_requires=">=3.7, <4",
