@@ -40,5 +40,5 @@ jobs:
     - name: Build a binary wheel and a source tarball
       run: |
         make build
-        python -m twine upload --r testpypi --username __token__ --password ${{ secrets.TEST_PYPI_TOKEN }} dist/*
+        venv/bin/twine upload --r testpypi --username __token__ --password ${{ secrets.TEST_PYPI_TOKEN }} dist/*
 
