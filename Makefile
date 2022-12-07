@@ -46,7 +46,12 @@ lint: install
 
 .PHONY: test
 test: install
-	$(PYTHON) -m pytest -s $(PACKAGE_NAME)
+	$(PYTHON) -m coverage run --source $(PACKAGE_NAME) -m pytest -s tests || exit 1
+	$(PYTHON) -m coverage report --show-missing
+
+.PHONY: build
+build: install
+	$(PYTHON) -m build
 
 ###############################################################################
 # END BOILERPLATE

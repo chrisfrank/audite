@@ -1,11 +1,11 @@
-# Audite: instant Change Data Capture for SQLite
+# Audite: instant change feeds for SQLite
 
 Audite uses SQL triggers to add a transactional change feed to any SQLite
-database. It gives you a totally-ordered history of all changes to your data,
-without touching your application code or running an extra process.
+database. It gives you a totally-ordered audit history of all changes to your
+data, without touching your application code or running an extra process.
 
 ## Use cases
-- Track what changed when
+- Track who changed what, when
 - Restore previous versions of changed rows
 - Replicate data to external systems by streaming the change feed
 
@@ -30,10 +30,10 @@ sqlite3 todo.db "CREATE TABLE task (
     python3 -m audite todo.db
     ```
 
-Done! Now any process can INSERT, UPDATE, and DELETE from your DB as usual, and
-audite's triggers will log these operations as [change events](#event-schema)
-in the `audite_changefeed` table. All (and only) committed transactions will
-appear in the history. You only need to apply audite once per database/schema.
+Done! From now on, any process can `INSERT`, `UPDATE`, and `DELETE` from your
+database as usual, and audite's triggers will store the results as [change
+events](#event-schema) in the `audite_changefeed` table. All (and only)
+committed transactions will appear in the change feed.
 
 ## Modfying data and querying the change feed
 

@@ -5,7 +5,7 @@ https://packaging.python.org/guides/distributing-packages-using-setuptools/
 https://github.com/pypa/sampleproject
 """
 
-from setuptools import setup, find_packages
+from setuptools import setup
 import pathlib
 
 here = pathlib.Path(__file__).parent.resolve()
@@ -15,7 +15,7 @@ long_description = (here / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="audite",
-    version="0.4.0",
+    version="0.4.1",
     description="Instant data auditing for SQLite",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -30,8 +30,6 @@ setup(
         # Indicate who your project is intended for
         "Intended Audience :: Developers",
         "Topic :: Software Development :: Build Tools",
-        # Pick your license as you wish
-        "License :: MIT License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
@@ -40,8 +38,8 @@ setup(
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3 :: Only",
     ],
-    keywords="sqlite, audit, history, change-data-capture",
-    packages=find_packages(where="audite"),
+    keywords="sqlite, audit, history, change-data-capture, change feed",
+    packages=["audite"],
     install_requires=[],
     python_requires=">=3.7, <4",
     entry_points={
