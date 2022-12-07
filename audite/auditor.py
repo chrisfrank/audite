@@ -46,13 +46,16 @@ def _gen_ddl() -> t.List[str]:
     return [table_ddl, view_ddl]
 
 
-def _json_object_sql(ref: t.Literal["OLD", "NEW"], cols: t.List[str]) -> str:
+def _json_object_sql(ref: str, cols: t.List[str]) -> str:
     """
     Approximates pg's 'row_to_json()' function by inspecting the table schema
     and building a json_object(label1, value1, label2, value2...) expression.
 
     https://www.sqlite.org/json1.html#jobj
     """
+    if ref not in ("OLD", "NEW"):
+        raise ValueError("ref must be 'OLD' or 'NEW'")
+
     pairs: t.List[str] = []
     for col in cols:
         key, val = f"'{col}', ", f'{ref}."{col}"'
