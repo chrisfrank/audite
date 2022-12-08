@@ -9,36 +9,37 @@ on:
   pull_request:
     branches: [ "main" ]
 jobs:
-  #test:
-    #runs-on: ubuntu-latest
-    #strategy:
-      #fail-fast: false
-      #matrix:
-        #python-version: ["3.7"] #["3.7", "3.8", "3.9", "3.10", "3.11"]
-    #steps:
-    #- uses: actions/checkout@v3
-    #- name: Set up Python ${{ matrix.python-version }}
-      #uses: actions/setup-python@v3
-      #with:
-        #python-version: ${{ matrix.python-version }}
-    #- name: Lint
-      #run: |
-        #make lint
-    #- name: Test with pytest
-      #run: |
-        #make test
-  publish:
-    #needs: [test]
+  test:
     runs-on: ubuntu-latest
-    #if: github.event_name == 'release' && github.event.action == 'published'
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Lint
+      run: |
+        make lint
+    - name: Test with pytest
+      run: |
+        make test
+  publish:
+    needs: [test]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
     steps:
     - uses: actions/checkout@v3
     - name: Set up Python 3.7
       uses: actions/setup-python@v3
       with:
         python-version: 3.7
-    - name: Build a binary wheel and a source tarball
+    - name: Build and upload to pypi
       run: |
         make build
         venv/bin/twine upload --repository testpypi --username __token__ --password ${{ secrets.TEST_PYPI_TOKEN }} dist/*
+        #venv/bin/twine upload --username __token__ --password ${{ secrets.PYPI_TOKEN }} dist/*
 
