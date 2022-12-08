@@ -111,3 +111,18 @@ as part of your schema migration scripts or even on app startup.
 When your database schema hasn't changed, then re-running audite does nothing.
 When your schema _has_ changed, then re-running audite rebuilds the triggers to
 write to the change feed with the latest schema.
+
+## Dependencies
+Audite is a python package with no dependencies. You need Python >= 3.7 to
+enable audite on a database, but because "enable audite on a database" just
+means "add some SQL triggers," you don't need Python after the triggers are
+installed.
+
+
+## Prior Art
+- [litestream](https://litestream.io/blog/why-i-built-litestream/) by
+  @benbjohnson makes a convincing case for using SQLite in production.
+- [supa_audit](https://github.com/supabase/supa_audit) by @supabase
+  demonstrates how easy change feeds can be in Postgres.
+- [marmot](https://github.com/maxpert/marmot) by @maxpert got me unstuck re:
+  how to work around SQLite's lack of a `row_to_json()` function.
