@@ -160,7 +160,7 @@ def track_changes(
         for statement in _gen_ddl():
             db.execute(statement)
 
-        if tables is None:
+        if not tables:
             tables = [
                 row[0]
                 for row in db.execute(

@@ -1,18 +1,24 @@
 import argparse
 import sqlite3
+import sys
+import typing as t
 
 from .auditor import track_changes
 
 
-def main() -> None:
+def main(args: t.List[str]) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("db_path")
-    args = parser.parse_args()
+    parser.add_argument("-t", "--table", action="append")
 
-    db = sqlite3.connect(args.db_path)
-    track_changes(db)
-    print(f"auditing enabled for {args.db_path}")
+    config = parser.parse_args(args)
+    db = sqlite3.connect(config.db_path)
+    track_changes(
+        db,
+        tables=config.table,
+    )
+    print(f"auditing enabled for {config.db_path}")
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
