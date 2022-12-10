@@ -30,10 +30,10 @@ def test_main() -> None:
 
         main([str(dbpath), "-t", "post", "-t", "author"])
 
+        db.execute("INSERT INTO author (id) VALUES ('author')")
         db.execute("INSERT INTO post (id) VALUES ('post')")
         db.execute("INSERT INTO comment (id) VALUES ('comment')")
-        db.execute("INSERT INTO author (id) VALUES ('comment')")
 
         query ="SELECT subject FROM audite_changefeed ORDER BY id"
         history = list(db.execute(query))
-        assert history == [('post',),('comment',)]
+        assert history == [('author',),('post',)]

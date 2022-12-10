@@ -66,6 +66,9 @@ def _json_object_sql(ref: str, cols: t.List[str]) -> str:
 
 
 def _build_newval_oldval_sql(cols: t.List[str], event: str) -> str:
+    """
+    Builds instructions for tracking new and old row values via json_object().
+    """
     if event == "DELETE":
         return f"json_object('old', {_json_object_sql('OLD', cols)})"
     elif event == "UPDATE":
@@ -80,6 +83,10 @@ def _build_newval_oldval_sql(cols: t.List[str], event: str) -> str:
 
 
 def _track_table(db: sqlite3.Connection, table: str, event: str) -> None:
+    """
+    Adds AFTER <INSERT|UPDATE|DELETE> triggers to log change events.
+    """
+
     cursor = db.cursor()
     record_ref = "OLD" if event == "DELETE" else "NEW"
     trigger_name = f"audite_audit_{table}_{event.lower()}_trigger"
@@ -96,7 +103,7 @@ def _track_table(db: sqlite3.Connection, table: str, event: str) -> None:
 
     # for tables with a single-column primary key, subject is just the primary
     # key as text. for compound primary keys, concatenate each key separated by
-    # ':', so that e.g. (1,) becomes '1' and (1, 'abc') becomes '1:abc'
+    # ':', so that e.g. (1,) becomes '1' and (1, 'abc') becomes a URN '1:abc'
     subject = " || ':' || ".join(key_columns)
 
     data = _build_newval_oldval_sql(all_columns, event)
@@ -122,6 +129,8 @@ def _track_table(db: sqlite3.Connection, table: str, event: str) -> None:
 
 
 def _create_indices(db: sqlite3.Connection) -> None:
+    """Creates indexes for efficiently querying the change feed"""
+
     # Support querying the history of a particular subject:
     # SELECT * from audite_history WHERE (source, subject) = ('post', '123')
     db.execute(
@@ -146,6 +155,10 @@ def track_changes(
     tables: t.Optional[t.List[str]] = None,
     autoindex: bool = True,
 ) -> None:
+    """
+    Adds a transactional change feed to the target sqlite database.
+    """
+
     events = ["INSERT", "UPDATE", "DELETE"]
     with db:
         if db.in_transaction:

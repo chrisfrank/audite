@@ -75,7 +75,7 @@ The event schema follows the [CloudEvents
 spec](https://github.com/cloudevents/spec) so that other systems can easily
 handle events from yours.
 
-- `id` uniquely identifies the event.
+- `id` uniquely identifies the event with a monotonically increasing integer.
 - `source` is name of the database table that changed.
 - `subject` is the primary key of the database row that changed.
 - `type` describes the type of change: `*.created`, `*.updated`, or `*.deleted`.
@@ -87,7 +87,7 @@ handle events from yours.
 and sort them efficiently, but the CloudEvents spec mandates strings. To query
 events that conform exactly to the [CloudEvents JSON
 spec](https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/formats/json-format.md),
-select from the `audite_cloudevents` view instead of the underlying
+select from the `audite_cloudevent` view instead of the underlying
 `audite_changefeed` table:
 
 ```sh
@@ -112,6 +112,14 @@ When your database schema hasn't changed, then re-running audite does nothing.
 When your schema _has_ changed, then re-running audite rebuilds the triggers to
 write to the change feed with the latest schema.
 
+## Auditing only particular tables
+By default, audite tracks all tables in the target database. But you can specify
+tables to track via the `--table` argument:
+
+```sh
+python3 -m audite blog.db --table post --table comment
+```
+
 ## Dependencies
 Audite is a python package with no dependencies. You need Python >= 3.7 to
 enable audite on a database, but because "enable audite on a database" just
@@ -124,5 +132,5 @@ installed.
   @benbjohnson makes a convincing case for using SQLite in production.
 - [supa_audit](https://github.com/supabase/supa_audit) by @supabase
   demonstrates how easy change feeds can be in Postgres.
-- [marmot](https://github.com/maxpert/marmot) by @maxpert got me unstuck re:
-  how to work around SQLite's lack of a `row_to_json()` function.
+- [marmot](https://github.com/maxpert/marmot) by @maxpert uses schema
+  introspection and triggers that directly inspired the approach here.
